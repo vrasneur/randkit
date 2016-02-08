@@ -3,6 +3,7 @@
 import os
 import struct
 import subprocess
+import sys
 
 class Xor128(object):
     MASK = 2**32 - 1
@@ -79,14 +80,22 @@ class Xor128(object):
         idx = 1
 
         while ret != 0:
-            print 'idx: %d' % idx
+            print '[*] iteration: %d' % idx
             p = subprocess.Popen('gpg -q --decrypt --passphrase-fd 0 --output %s %s' % (outfile, infile),
                                  shell=True, stdin=subprocess.PIPE)
             p.communicate(input=self.output_state())
             ret = p.returncode
-            self.backward()
-            idx += 1
+            if ret == 0:
+                print '[*] key found!'
+            else:
+                print '[*] bad key. Retrying with previous state...'
+                self.backward()
+                idx += 1
         
 if __name__ == '__main__':
+    if len(sys.argv) != 3:
+        print >>sys.stderr, '[!] syntax: %s <encryped_file> <decryted_file>' % sys.argv[0]
+        raise SystemExit(-1)
+    
     p = Xor128.init_from_urandom()
-    p.gpg_decrypt('encrypted.enc', 'plain.txt')
+    p.gpg_decrypt(sys.argv[1], sys.argv[2])
