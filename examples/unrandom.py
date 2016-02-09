@@ -94,7 +94,7 @@ class Xor128(object):
         
 if __name__ == '__main__':
     if len(sys.argv) != 3:
-        print >>sys.stderr, '[!] syntax: %s <encryped_file> <decryted_file>' % sys.argv[0]
+        print >>sys.stderr, '[!] syntax: %s <encrypted_file_path> <decryted_file_path>' % sys.argv[0]
         raise SystemExit(-1)
     
     p = Xor128.init_from_urandom()
