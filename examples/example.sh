@@ -1,8 +1,8 @@
 #!/bin/bash
 
 echo "[*] reloading the module"
-#sudo rmmod randkit_xor128
-#sudo insmod ../xor128/randkit_xor128.ko
+sudo rmmod randkit_xor128
+sudo insmod ../xor128/randkit_xor128.ko
 
 echo "[*] cleaning files from previous run"
 rm -f mykey encrypted.enc decrypted.txt
@@ -23,7 +23,7 @@ echo "[*] generating 5KB of random numbers again"
 dd if=/dev/urandom of=/dev/null bs=5K count=1
 
 echo "[*] decrypt the data by reversing the PRNG to retrieve the key"
-echo "[*] this should take approx. 1250 iterations"
+echo "[*] this should take approx. 1280 iterations"
 ./unrandom.py encrypted.enc decrypted.txt
 
 echo "[*] comparing the original and decrypted files:"
