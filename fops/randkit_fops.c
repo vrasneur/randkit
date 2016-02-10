@@ -4,6 +4,7 @@
 #include <linux/uaccess.h>
 #include <linux/fs.h>
 #include <linux/kallsyms.h>
+#include <linux/namei.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Vincent Rasneur <vrasneur@free.fr>");
@@ -17,31 +18,62 @@ static struct file_operations *rk_param_get_fops(void)
     return (struct file_operations *)urandom_fops_addr;
 }
 
-static struct file_operations *rk_vfs_get_fops(int minor)
+static struct file_operations *rk_inode_get_fops(struct inode *inode)
 {
-    struct inode inode;
     struct file fp;
     struct address_space mapping;
-  
-    memset(&inode, 0, sizeof(inode));
-    // chrdev_open needs a double link list here
-    INIT_LIST_HEAD(&inode.i_devices);
-    // get a pointer to chrdev_open
-    init_special_inode(&inode, S_IFCHR, MKDEV(1, minor));
 
     memset(&fp, 0, sizeof(fp));
     memset(&mapping, 0, sizeof(mapping));
-    // memdev_open (called by chrdev_open)
+    // memory_open (called by chrdev_open)
     // needs the f_mapping pointer on old 3.x kernels
     fp.f_mapping = &mapping;
   
     // inode.i_fop->open == chrdev_open
-    inode.i_fop->open(&inode, &fp);
+    inode->i_fop->open(inode, &fp);
 
-    list_del(&inode.i_devices);
-  
     // remove the const correctness
     return (struct file_operations *)fp.f_op;
+}
+
+static struct file_operations *rk_vfs_get_fops(int minor)
+{
+    struct inode inode;
+    struct file_operations *fop = NULL;
+  
+    memset(&inode, 0, sizeof(inode));
+    // chrdev_open needs a doubly linked list here
+    INIT_LIST_HEAD(&inode.i_devices);
+    // get a pointer to chrdev_open
+    init_special_inode(&inode, S_IFCHR, MKDEV(1, minor));
+
+    if(inode.i_fop != NULL && inode.i_fop->open != NULL) {
+        // call chrdev_open, that will call memory_open
+        fop = rk_inode_get_fops(&inode);
+    }
+
+    list_del(&inode.i_devices);
+    
+    return fop;
+}
+
+static struct file_operations *rk_path_get_fops(char const *name)
+{
+    struct path path;
+    struct file_operations *fop = NULL;
+    struct inode *inode = NULL;
+    
+    int ret = kern_path(name, LOOKUP_FOLLOW, &path);
+    if(ret == 0) {
+        inode = d_backing_inode(path.dentry);
+
+        if(inode->i_fop != NULL && inode->i_fop->open != NULL) {
+            // call chrdev_open, that will call memory_open
+            fop = rk_inode_get_fops(inode);
+        }
+    }
+
+    return fop;
 }
 
 static struct file_operations *rk_kallsyms_get_fops(char const *name)
@@ -74,6 +106,9 @@ static void rk_test_fops(void)
     urandom_fops = rk_kallsyms_get_fops("urandom_fops");
     rk_check_fops(urandom_fops, "kallsyms");
 
+    urandom_fops = rk_path_get_fops("/dev/urandom");
+    rk_check_fops(urandom_fops, "path");
+    
     urandom_fops = rk_param_get_fops();
     rk_check_fops(urandom_fops, "param");
 
