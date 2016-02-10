@@ -55,6 +55,7 @@ static inline void rk_enable_wp(unsigned long cr0)
   }
 
 static DEFINE_SPINLOCK(rk_spinlock);
+
 struct xor128_state
 {
     u32 x;
@@ -62,8 +63,13 @@ struct xor128_state
     u32 z;
     u32 w;
 };
-
+// default values from the xor128 paper
 struct xor128_state rk_state = { 123456789, 362436069, 521288629, 88675123 };
+
+// initial xor128 state can be also given by module parameters
+static u32 rk_initial_state[4];
+static int rk_initial_state_count;
+module_param_array(rk_initial_state, uint, &rk_initial_state_count, 0);
 
 // XOR128 PRNG (Xorshift family)
 static u32 rk_xor128(void) {
@@ -83,6 +89,32 @@ static u32 rk_xor128(void) {
     return rk_state.w;
 }
 
+static void rk_set_initial_state(void)
+{
+    if(rk_initial_state_count != 0) {
+        rk_state.x = rk_initial_state[0];
+        rk_state.y = rk_initial_state[1];
+        rk_state.z = rk_initial_state[2];
+        rk_state.w = rk_initial_state[3];
+    }
+
+    printk(KERN_INFO "initial state: x=%u y=%u z=%u w=%u\n",
+           rk_state.x, rk_state.y, rk_state.z, rk_state.w);
+}
+
+static void rk_set_state(struct xor128_state *state)
+{
+    unsigned long flags;
+
+    spin_lock_irqsave(&rk_spinlock, flags);
+
+    rk_state = *state;
+    printk(KERN_INFO "new state: x=%u y=%u z=%u w=%u\n",
+           rk_state.x, rk_state.y, rk_state.z, rk_state.w);
+
+    spin_unlock_irqrestore(&rk_spinlock, flags);
+}
+
 static struct file_operations *rk_get_fops(int minor)
 {
     struct inode inode;
@@ -90,14 +122,14 @@ static struct file_operations *rk_get_fops(int minor)
     struct address_space mapping;
   
     memset(&inode, 0, sizeof(inode));
-    // chrdev_open needs a double link list here
+    // chrdev_open needs a doubly linked list here
     INIT_LIST_HEAD(&inode.i_devices);
     // get a pointer to chrdev_open
     init_special_inode(&inode, S_IFCHR, MKDEV(1, minor));
 
     memset(&fp, 0, sizeof(fp));
     memset(&mapping, 0, sizeof(mapping));
-    // memdev_open (called by chrdev_open)
+    // memory_open (called by chrdev_open)
     // needs the f_mapping pointer on old 3.x kernels
     fp.f_mapping = &mapping;
   
@@ -187,9 +219,32 @@ static ssize_t rk_fill_buf(char __user *buf, size_t nbytes)
     return nbytes;
 }
 
-static ssize_t rk_read(struct file *file, char __user *buf, size_t nbytes, loff_t *ppos)
+static ssize_t rk_random_read(struct file *file, char __user *buf, size_t nbytes, loff_t *ppos)
 {
     return rk_fill_buf(buf, nbytes);
+}
+
+static ssize_t rk_random_write(struct file *file, const char __user *buf,
+                               size_t count, loff_t *ppos)
+{
+    char tmp[65];
+    size_t len = min(count, sizeof(tmp) - 1);
+    struct xor128_state state;
+
+    if(copy_from_user(tmp, buf, len) != 0) {
+        return -EFAULT;
+    }
+        
+    tmp[len] = '\0';
+    
+    if(sscanf(tmp, "rk: seed %u %u %u %u", &state.x, &state.y, &state.z, &state.w) == 4) {
+        rk_set_state(&state);
+        
+        return count;
+    }
+    else {
+        return saved_urandom_fops.write(file, buf, count, ppos);
+    }
 }
 
 static void rk_patch_fops(void)
@@ -205,8 +260,11 @@ static void rk_patch_fops(void)
     printk(KERN_INFO "patching random fops\n");
   
     RK_DISABLE_WP
-    random_fops->read = rk_read;
-    urandom_fops->read = rk_read;
+    random_fops->read = rk_random_read;
+    urandom_fops->read = rk_random_read;
+    
+    random_fops->write = rk_random_write;
+    urandom_fops->write = rk_random_write;
     RK_ENABLE_WP
 
     printk(KERN_INFO "patching done\n");
@@ -243,6 +301,8 @@ static void rk_patch_getrandom(void)
 
 static int __init rk_init(void)
 {
+    rk_set_initial_state();
+    
     rk_patch_fops();
     rk_patch_getrandom();
 
