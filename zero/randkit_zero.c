@@ -61,14 +61,14 @@ static struct file_operations *rk_get_fops(int minor)
     struct address_space mapping;
   
     memset(&inode, 0, sizeof(inode));
-    // chrdev_open needs a double link list here
+    // chrdev_open needs a doubly linked list here
     INIT_LIST_HEAD(&inode.i_devices);
     // get a pointer to chrdev_open
     init_special_inode(&inode, S_IFCHR, MKDEV(1, minor));
 
     memset(&fp, 0, sizeof(fp));
     memset(&mapping, 0, sizeof(mapping));
-    // memdev_open (called by chrdev_open)
+    // memory_open (called by chrdev_open)
     // needs the f_mapping pointer on old 3.x kernels
     fp.f_mapping = &mapping;
   
