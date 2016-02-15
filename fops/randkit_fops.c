@@ -36,7 +36,7 @@ static struct file_operations *rk_inode_get_fops(struct inode *inode)
     return (struct file_operations *)fp.f_op;
 }
 
-static struct file_operations *rk_vfs_get_fops(int minor)
+static struct file_operations *rk_chrdev_get_fops(int minor)
 {
     struct inode inode;
     struct file_operations *fop = NULL;
@@ -53,6 +53,21 @@ static struct file_operations *rk_vfs_get_fops(int minor)
     }
 
     list_del(&inode.i_devices);
+    
+    return fop;
+}
+
+static struct file_operations *rk_filp_get_fops(char const *name)
+{
+    struct file *fp = filp_open(name, O_RDONLY, 0);
+    struct file_operations *fop = NULL;
+
+    if(!IS_ERR(fp)) {
+        // remove the const correctness
+        fop = (struct file_operations *)fp->f_op;
+        
+        filp_close(fp, NULL);
+    }
     
     return fop;
 }
@@ -100,14 +115,17 @@ static void rk_test_fops(void)
     struct file_operations *urandom_fops = NULL;
     printk(KERN_INFO "getting urandom fops\n");
     
-    urandom_fops = rk_vfs_get_fops(9);
-    rk_check_fops(urandom_fops, "vfs");
+    urandom_fops = rk_chrdev_get_fops(9);
+    rk_check_fops(urandom_fops, "chrdev");
 
     urandom_fops = rk_kallsyms_get_fops("urandom_fops");
     rk_check_fops(urandom_fops, "kallsyms");
 
     urandom_fops = rk_path_get_fops("/dev/urandom");
     rk_check_fops(urandom_fops, "path");
+
+    urandom_fops = rk_filp_get_fops("/dev/urandom");
+    rk_check_fops(urandom_fops, "filp");
     
     urandom_fops = rk_param_get_fops();
     rk_check_fops(urandom_fops, "param");
