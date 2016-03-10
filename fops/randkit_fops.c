@@ -112,23 +112,23 @@ static void rk_check_fops(struct file_operations *fops, char const *way)
 
 static void rk_test_fops(void)
 {
-    struct file_operations *urandom_fops = NULL;
-    printk(KERN_INFO "getting urandom fops\n");
+    struct file_operations *urandom_fops_ptr = NULL;
+    printk(KERN_INFO "getting pointer to urandom fops\n");
     
-    urandom_fops = rk_chrdev_get_fops(9);
-    rk_check_fops(urandom_fops, "chrdev");
+    urandom_fops_ptr = rk_chrdev_get_fops(9);
+    rk_check_fops(urandom_fops_ptr, "chrdev");
 
-    urandom_fops = rk_kallsyms_get_fops("urandom_fops");
-    rk_check_fops(urandom_fops, "kallsyms");
+    urandom_fops_ptr = rk_kallsyms_get_fops("urandom_fops");
+    rk_check_fops(urandom_fops_ptr, "kallsyms");
 
-    urandom_fops = rk_path_get_fops("/dev/urandom");
-    rk_check_fops(urandom_fops, "path");
+    urandom_fops_ptr = rk_path_get_fops("/dev/urandom");
+    rk_check_fops(urandom_fops_ptr, "path");
 
-    urandom_fops = rk_filp_get_fops("/dev/urandom");
-    rk_check_fops(urandom_fops, "filp");
+    urandom_fops_ptr = rk_filp_get_fops("/dev/urandom");
+    rk_check_fops(urandom_fops_ptr, "filp");
     
-    urandom_fops = rk_param_get_fops();
-    rk_check_fops(urandom_fops, "param");
+    urandom_fops_ptr = rk_param_get_fops();
+    rk_check_fops(urandom_fops_ptr, "param");
 
     printk(KERN_INFO "getting done\n");
 }

