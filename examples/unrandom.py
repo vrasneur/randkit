@@ -67,7 +67,7 @@ class Xor128(object):
         self.y = self.x
         self.x = self.reverse_xor_lshift(t, 11)
 
-        return self.x
+        return self.w
 
     def print_state(self):
         print 'x=%d\ny=%d\nz=%d\nw=%d\n' % (self.x, self.y, self.z, self.w)
